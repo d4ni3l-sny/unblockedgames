@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Asteroids Blast</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: monospace; }
+    body { background: #030712; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 8px; touch-action: manipulation; }
+    .header { width: 100%; max-width: 460px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .stat { background: #111827; padding: 6px 14px; border-radius: 8px; border: 1px solid #1f2937; font-size: 14px; font-weight: bold; color: #38bdf8; }
+    canvas { display: block; background: #030712; border: 2px solid #1f2937; border-radius: 10px; box-shadow: 0 0 20px rgba(0, 255, 200, 0.15); }
+    .mobile-controls { display: flex; justify-content: space-between; width: 100%; max-width: 460px; margin-top: 10px; }
+    .m-btn { background: #1f2937; color: #fff; border: 1px solid #374151; border-radius: 8px; padding: 12px 18px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .m-btn:active { background: #374151; }
+    .hint { color: #64748b; font-size: 11px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="stat">SCORE: <span id="score">0</span></div>
+    <div class="stat">LIVES: <span id="lives">3</span></div>
+  </div>
+
+  <canvas id="asteroids" width="460" height="460"></canvas>
+
+  <div class="mobile-controls">
+    <button class="m-btn" id="m-left">↺</button>
+    <button class="m-btn" id="m-thrust">▲ THRUST</button>
+    <button class="m-btn" id="m-right">↻</button>
+    <button class="m-btn" style="background:#ef4444" id="m-fire">FIRE</button>
+  </div>
+
+  <div class="hint">Up/W = Thrust, Left/Right = Rotate, Space = Shoot</div>
+
+  <script>
+    const canvas = document.getElementById('asteroids');
+    const ctx = canvas.getContext('2d');
+
+    let ship = { x: 230, y: 230, r: 12, rot: 0, rotSpeed: 0, vx: 0, vy: 0, thrusting: false };
+    let lasers = [];
+    let roids = [];
+    let score = 0, lives = 3;
+    let gameOver = false;
+    let keys = {};
+
+    function createAsteroid(x, y, r) {
+      const lvl = r || 40;
+      const vert = Math.floor(Math.random() * 6) + 8;
+      const offsets = [];
+      for (let i = 0; i < vert; i++) offsets.push((Math.random() * 0.4 + 0.8));
+      return {
+        x: x !== undefined ? x : (Math.random() > 0.5 ? 0 : canvas.width),
+        y: y !== undefined ? y : Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * (120 / lvl),
+        vy: (Math.random() - 0.5) * (120 / lvl),
+        r: lvl,
+        vert,
+        offsets
+      };
+    }
+
+    function reset() {
+      score = 0; lives = 3; gameOver = false;
+      ship = { x: canvas.width / 2, y: canvas.height / 2, r: 12, rot: -Math.PI / 2, rotSpeed: 0, vx: 0, vy: 0, thrusting: false };
+      lasers = [];
+      roids = [];
+      for (let i = 0; i < 5; i++) roids.push(createAsteroid());
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById('score').textContent = score;
+      document.getElementById('lives').textContent = lives;
+    }
+
+    window.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (['ArrowUp', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+      if (e.code === 'Space') {
+        if (gameOver) reset();
+        else shootLaser();
+      }
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    let mThrust = false, mLeft = false, mRight = false;
+    document.getElementById('m-thrust').addEventListener('pointerdown', () => mThrust = true);
+    document.getElementById('m-thrust').addEventListener('pointerup', () => mThrust = false);
+    document.getElementById('m-left').addEventListener('pointerdown', () => mLeft = true);
+    document.getElementById('m-left').addEventListener('pointerup', () => mLeft = false);
+    document.getElementById('m-right').addEventListener('pointerdown', () => mRight = true);
+    document.getElementById('m-right').addEventListener('pointerup', () => mRight = false);
+    document.getElementById('m-fire').addEventListener('pointerdown', () => {
+      if (gameOver) reset();
+      else shootLaser();
+    });
+
+    function shootLaser() {
+      if (lasers.length < 5) {
+        lasers.push({
+          x: ship.x + 4 / 3 * ship.r * Math.cos(ship.rot),
+          y: ship.y + 4 / 3 * ship.r * Math.sin(ship.rot),
+          vx: 8 * Math.cos(ship.rot),
+          vy: 8 * Math.sin(ship.rot),
+          dist: 0
+        });
+      }
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      // Rotate ship
+      if (keys['ArrowLeft'] || keys['KeyA'] || mLeft) ship.rot -= 0.07;
+      if (keys['ArrowRight'] || keys['KeyD'] || mRight) ship.rot += 0.07;
+
+      // Thrust
+      ship.thrusting = keys['ArrowUp'] || keys['KeyW'] || mThrust;
+      if (ship.thrusting) {
+        ship.vx += 0.12 * Math.cos(ship.rot);
+        ship.vy += 0.12 * Math.sin(ship.rot);
+      } else {
+        ship.vx *= 0.985;
+        ship.vy *= 0.985;
+      }
+
+      // Move ship
+      ship.x += ship.vx;
+      ship.y += ship.vy;
+
+      // Wrap ship
+      if (ship.x < -ship.r) ship.x = canvas.width + ship.r;
+      if (ship.x > canvas.width + ship.r) ship.x = -ship.r;
+      if (ship.y < -ship.r) ship.y = canvas.height + ship.r;
+      if (ship.y > canvas.height + ship.r) ship.y = -ship.r;
+
+      // Move lasers
+      for (let i = lasers.length - 1; i >= 0; i--) {
+        const l = lasers[i];
+        l.x += l.vx;
+        l.y += l.vy;
+        l.dist += Math.sqrt(l.vx * l.vx + l.vy * l.vy);
+
+        if (l.x < 0) l.x = canvas.width;
+        if (l.x > canvas.width) l.x = 0;
+        if (l.y < 0) l.y = canvas.height;
+        if (l.y > canvas.height) l.y = 0;
+
+        if (l.dist > canvas.width * 0.7) {
+          lasers.splice(i, 1);
+        }
+      }
+
+      // Move & collide asteroids
+      for (let i = roids.length - 1; i >= 0; i--) {
+        const a = roids[i];
+        a.x += a.vx;
+        a.y += a.vy;
+
+        if (a.x < -a.r) a.x = canvas.width + a.r;
+        if (a.x > canvas.width + a.r) a.x = -a.r;
+        if (a.y < -a.r) a.y = canvas.height + a.r;
+        if (a.y > canvas.height + a.r) a.y = -a.r;
+
+        // Laser vs Asteroid
+        for (let j = lasers.length - 1; j >= 0; j--) {
+          const l = lasers[j];
+          const dist = Math.hypot(l.x - a.x, l.y - a.y);
+          if (dist < a.r) {
+            lasers.splice(j, 1);
+            score += Math.floor(100 - a.r);
+            updateUI();
+
+            if (a.r > 15) {
+              roids.push(createAsteroid(a.x, a.y, a.r / 2));
+              roids.push(createAsteroid(a.x, a.y, a.r / 2));
+            }
+            roids.splice(i, 1);
+            break;
+          }
+        }
+
+        // Ship vs Asteroid
+        if (roids[i]) {
+          const sDist = Math.hypot(ship.x - a.x, ship.y - a.y);
+          if (sDist < ship.r + a.r) {
+            lives--;
+            updateUI();
+            if (lives <= 0) {
+              gameOver = true;
+            } else {
+              ship.x = canvas.width / 2;
+              ship.y = canvas.height / 2;
+              ship.vx = 0; ship.vy = 0;
+            }
+          }
+        }
+      }
+
+      if (roids.length === 0) {
+        for (let i = 0; i < 6; i++) roids.push(createAsteroid());
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#030712';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Lasers
+      ctx.fillStyle = '#38bdf8';
+      lasers.forEach(l => {
+        ctx.beginPath();
+        ctx.arc(l.x, l.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw Asteroids
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.8;
+      roids.forEach(a => {
+        ctx.beginPath();
+        for (let j = 0; j < a.vert; j++) {
+          const angle = (j / a.vert) * Math.PI * 2;
+          const rad = a.r * a.offsets[j];
+          const x = a.x + rad * Math.cos(angle);
+          const y = a.y + rad * Math.sin(angle);
+          if (j === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      });
+
+      // Draw Ship
+      if (!gameOver) {
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Nose
+        ctx.moveTo(ship.x + 4/3 * ship.r * Math.cos(ship.rot), ship.y + 4/3 * ship.r * Math.sin(ship.rot));
+        // Rear Left
+        ctx.lineTo(ship.x - ship.r * (2/3 * Math.cos(ship.rot) + Math.sin(ship.rot)), ship.y - ship.r * (2/3 * Math.sin(ship.rot) - Math.cos(ship.rot)));
+        // Rear Right
+        ctx.lineTo(ship.x - ship.r * (2/3 * Math.cos(ship.rot) - Math.sin(ship.rot)), ship.y - ship.r * (2/3 * Math.sin(ship.rot) + Math.cos(ship.rot)));
+        ctx.closePath();
+        ctx.stroke();
+
+        // Thrust Flame
+        if (ship.thrusting) {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.moveTo(ship.x - ship.r * (2/3 * Math.cos(ship.rot) + 0.5 * Math.sin(ship.rot)), ship.y - ship.r * (2/3 * Math.sin(ship.rot) - 0.5 * Math.cos(ship.rot)));
+          ctx.lineTo(ship.x - 5/3 * ship.r * Math.cos(ship.rot), ship.y - 5/3 * ship.r * Math.sin(ship.rot));
+          ctx.lineTo(ship.x - ship.r * (2/3 * Math.cos(ship.rot) - 0.5 * Math.sin(ship.rot)), ship.y - ship.r * (2/3 * Math.sin(ship.rot) + 0.5 * Math.cos(ship.rot)));
+          ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px monospace';
+        ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 30);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    reset();
+    loop();
+  </script>
+</body>
+</html>

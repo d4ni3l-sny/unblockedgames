@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Crossy Highway</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: monospace; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 8px; touch-action: manipulation; }
+    .header { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .stat { background: #1e293b; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155; font-size: 14px; font-weight: bold; color: #facc15; }
+    canvas { display: block; background: #15803d; border-radius: 12px; border: 2px solid #334155; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .d-pad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 50px); gap: 6px; margin-top: 10px; }
+    .d-btn { background: #1e293b; border: 1px solid #334155; color: #fff; border-radius: 8px; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .d-btn:active { background: #334155; }
+    .btn-up { grid-column: 2; grid-row: 1; }
+    .btn-left { grid-column: 1; grid-row: 2; }
+    .btn-down { grid-column: 2; grid-row: 2; }
+    .btn-right { grid-column: 3; grid-row: 2; }
+    .hint { color: #64748b; font-size: 11px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="stat">SCORE: <span id="score">0</span></div>
+    <div class="stat">HIGH: <span id="high">0</span></div>
+  </div>
+
+  <canvas id="crossy" width="380" height="460"></canvas>
+
+  <div class="d-pad">
+    <button class="d-btn btn-up" id="btn-u">▲</button>
+    <button class="d-btn btn-left" id="btn-l">◀</button>
+    <button class="d-btn btn-down" id="btn-d">▼</button>
+    <button class="d-btn btn-right" id="btn-r">▶</button>
+  </div>
+
+  <div class="hint">Use Arrow keys or swipe / tap buttons to cross the road</div>
+
+  <script>
+    const canvas = document.getElementById('crossy');
+    const ctx = canvas.getContext('2d');
+    const LANE_H = 38;
+    const TOTAL_LANES = Math.floor(canvas.height / LANE_H);
+
+    let player = { col: 4, lane: 0, x: 190, y: 0 };
+    let score = 0, maxLaneReached = 0;
+    let highScore = parseInt(localStorage.getItem('crossy_high') || '0', 10);
+    document.getElementById('high').textContent = highScore;
+    let lanes = [];
+    let gameOver = false;
+
+    function initLanes() {
+      lanes = [];
+      for (let i = 0; i < TOTAL_LANES; i++) {
+        if (i === 0 || i === TOTAL_LANES - 1 || Math.random() < 0.25) {
+          lanes.push({ type: 'grass', y: canvas.height - (i + 1) * LANE_H, obstacles: [] });
+        } else if (Math.random() < 0.5) {
+          const speed = (Math.random() * 2 + 1.5) * (Math.random() > 0.5 ? 1 : -1);
+          const cars = [];
+          for (let c = 0; c < 3; c++) {
+            cars.push({ x: c * 150 + Math.random() * 40, w: 42, color: ['#ef4444', '#3b82f6', '#f59e0b', '#ec4899'][Math.floor(Math.random() * 4)] });
+          }
+          lanes.push({ type: 'road', y: canvas.height - (i + 1) * LANE_H, speed, obstacles: cars });
+        } else {
+          const speed = (Math.random() * 1.5 + 1.2) * (Math.random() > 0.5 ? 1 : -1);
+          const logs = [];
+          for (let l = 0; l < 3; l++) {
+            logs.push({ x: l * 160 + Math.random() * 30, w: 64, color: '#92400e' });
+          }
+          lanes.push({ type: 'river', y: canvas.height - (i + 1) * LANE_H, speed, obstacles: logs });
+        }
+      }
+    }
+
+    function reset() {
+      player = { col: 4, lane: 0, x: 190, y: canvas.height - LANE_H + 6 };
+      score = 0; maxLaneReached = 0;
+      gameOver = false;
+      document.getElementById('score').textContent = score;
+      initLanes();
+    }
+
+    function hop(dx, dy) {
+      if (gameOver) { reset(); return; }
+      player.lane = Math.max(0, player.lane + dy);
+      player.x = Math.max(10, Math.min(canvas.width - 30, player.x + dx * 36));
+
+      if (player.lane > maxLaneReached) {
+        maxLaneReached = player.lane;
+        score = maxLaneReached * 10;
+        document.getElementById('score').textContent = score;
+        if (score > highScore) {
+          highScore = score;
+          document.getElementById('high').textContent = highScore;
+          localStorage.setItem('crossy_high', highScore);
+        }
+      }
+
+      if (player.lane >= TOTAL_LANES - 1) {
+        // Crossed entire stretch - generate fresh lanes and reset to bottom
+        initLanes();
+        player.lane = 0;
+      }
+    }
+
+    window.addEventListener('keydown', e => {
+      if (['ArrowUp', 'KeyW'].includes(e.code)) { e.preventDefault(); hop(0, 1); }
+      if (['ArrowDown', 'KeyS'].includes(e.code)) { e.preventDefault(); hop(0, -1); }
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) { e.preventDefault(); hop(-1, 0); }
+      if (['ArrowRight', 'KeyD'].includes(e.code)) { e.preventDefault(); hop(1, 0); }
+      if (e.code === 'Space' && gameOver) reset();
+    });
+
+    document.getElementById('btn-u').addEventListener('click', () => hop(0, 1));
+    document.getElementById('btn-d').addEventListener('click', () => hop(0, -1));
+    document.getElementById('btn-l').addEventListener('click', () => hop(-1, 0));
+    document.getElementById('btn-r').addEventListener('click', () => hop(1, 0));
+
+    function update() {
+      if (gameOver) return;
+
+      const curLaneIdx = player.lane;
+      const currentLane = lanes[curLaneIdx];
+
+      // Update lane obstacles
+      lanes.forEach((lane, idx) => {
+        if (lane.type === 'road' || lane.type === 'river') {
+          lane.obstacles.forEach(obs => {
+            obs.x += lane.speed;
+            if (lane.speed > 0 && obs.x > canvas.width + 50) obs.x = -obs.w - 50;
+            if (lane.speed < 0 && obs.x < -obs.w - 50) obs.x = canvas.width + 50;
+          });
+        }
+      });
+
+      // Player collision logic
+      if (currentLane) {
+        const py = currentLane.y + 6;
+        player.y = py;
+
+        if (currentLane.type === 'road') {
+          for (let car of currentLane.obstacles) {
+            if (player.x + 18 > car.x && player.x < car.x + car.w) {
+              gameOver = true;
+            }
+          }
+        } else if (currentLane.type === 'river') {
+          let onLog = false;
+          for (let log of currentLane.obstacles) {
+            if (player.x + 14 > log.x && player.x + 6 < log.x + log.w) {
+              onLog = true;
+              player.x += currentLane.speed; // carry with log
+              break;
+            }
+          }
+          if (!onLog) {
+            gameOver = true; // Drowned
+          }
+        }
+      }
+
+      if (player.x < 0 || player.x > canvas.width - 20) gameOver = true;
+    }
+
+    function draw() {
+      // Draw Lanes
+      lanes.forEach(lane => {
+        if (lane.type === 'grass') {
+          ctx.fillStyle = '#15803d';
+          ctx.fillRect(0, lane.y, canvas.width, LANE_H);
+        } else if (lane.type === 'road') {
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(0, lane.y, canvas.width, LANE_H);
+          ctx.strokeStyle = '#64748b';
+          ctx.setLineDash([12, 12]);
+          ctx.beginPath();
+          ctx.moveTo(0, lane.y + LANE_H / 2);
+          ctx.lineTo(canvas.width, lane.y + LANE_H / 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (lane.type === 'river') {
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(0, lane.y, canvas.width, LANE_H);
+        }
+
+        // Draw Obstacles
+        if (lane.type === 'road') {
+          lane.obstacles.forEach(car => {
+            ctx.fillStyle = car.color;
+            ctx.fillRect(car.x, lane.y + 6, car.w, LANE_H - 12);
+            // Windshield
+            ctx.fillStyle = '#bae6fd';
+            ctx.fillRect(car.x + (lane.speed > 0 ? car.w - 12 : 4), lane.y + 9, 8, LANE_H - 18);
+          });
+        } else if (lane.type === 'river') {
+          lane.obstacles.forEach(log => {
+            ctx.fillStyle = log.color;
+            ctx.fillRect(log.x, lane.y + 4, log.w, LANE_H - 8);
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(log.x + 4, lane.y + 8, log.w - 8, 4);
+          });
+        }
+      });
+
+      // Draw Chicken / Player
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(player.x, player.y, 20, 20);
+      // Red crest
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(player.x + 6, player.y - 4, 8, 4);
+      // Beak
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(player.x + 8, player.y + 4, 4, 5);
+
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('S Q U I S H E D !', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px monospace';
+        ctx.fillText('Tap or Press Space to Restart', canvas.width / 2, canvas.height / 2 + 25);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    reset();
+    loop();
+  </script>
+</body>
+</html>

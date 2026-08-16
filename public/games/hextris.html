@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Hextris</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0b0f19; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 8px; touch-action: manipulation; }
+    .header { width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .stat { background: #1e293b; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155; font-size: 14px; font-weight: bold; color: #38bdf8; }
+    canvas { display: block; background: #0b0f19; border: 2px solid #1e293b; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+    .controls { display: flex; gap: 12px; margin-top: 10px; }
+    .btn { background: #1e293b; color: #fff; border: 1px solid #334155; padding: 12px 24px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
+    .btn:active { background: #3b82f6; }
+    .hint { color: #64748b; font-size: 11px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="stat">SCORE: <span id="score">0</span></div>
+    <div class="stat">HIGH: <span id="high">0</span></div>
+  </div>
+
+  <canvas id="hextris" width="400" height="400"></canvas>
+
+  <div class="controls">
+    <button class="btn" id="btn-l">↺ Rotate Left</button>
+    <button class="btn" id="btn-r">↻ Rotate Right</button>
+  </div>
+
+  <div class="hint">Use Left/Right arrow keys, A/D, or tap buttons to rotate hexagon</div>
+
+  <script>
+    const canvas = document.getElementById('hextris');
+    const ctx = canvas.getContext('2d');
+    const CENTER = { x: 200, y: 200 };
+    const HEX_RADIUS = 50;
+    const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6'];
+
+    let angle = 0;
+    let targetAngle = 0;
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('hextris_high') || '0', 10);
+    document.getElementById('high').textContent = highScore;
+    let blocks = [[], [], [], [], [], []]; // 6 sides
+    let fallingBlocks = [];
+    let gameOver = false;
+    let spawnTimer = 0;
+
+    function reset() {
+      angle = 0; targetAngle = 0;
+      score = 0;
+      blocks = [[], [], [], [], [], []];
+      fallingBlocks = [];
+      gameOver = false;
+      document.getElementById('score').textContent = score;
+    }
+
+    function rotate(dir) {
+      if (gameOver) { reset(); return; }
+      targetAngle += (dir * Math.PI / 3);
+    }
+
+    window.addEventListener('keydown', e => {
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) rotate(-1);
+      if (['ArrowRight', 'KeyD'].includes(e.code)) rotate(1);
+      if (e.code === 'Space' && gameOver) reset();
+    });
+
+    document.getElementById('btn-l').addEventListener('click', () => rotate(-1));
+    document.getElementById('btn-r').addEventListener('click', () => rotate(1));
+
+    function spawnFalling() {
+      const side = Math.floor(Math.random() * 6);
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      fallingBlocks.push({ side, color, dist: 180, speed: 1.8 + Math.min(2.5, score / 400) });
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      // Smooth angle interpolation
+      angle += (targetAngle - angle) * 0.25;
+
+      spawnTimer++;
+      if (spawnTimer > Math.max(30, 80 - Math.floor(score / 50))) {
+        spawnFalling();
+        spawnTimer = 0;
+      }
+
+      // Update falling blocks
+      for (let i = fallingBlocks.length - 1; i >= 0; i--) {
+        const b = fallingBlocks[i];
+        b.dist -= b.speed;
+
+        // Current stack height on this side
+        // Note: adjust side based on current rotation angle
+        const relSide = (b.side - Math.round(targetAngle / (Math.PI / 3)) % 6 + 6) % 6;
+        const stackHeight = blocks[relSide].length;
+        const targetDist = HEX_RADIUS + stackHeight * 12;
+
+        if (b.dist <= targetDist) {
+          blocks[relSide].push(b.color);
+          fallingBlocks.splice(i, 1);
+          checkCombos(relSide);
+          if (blocks[relSide].length >= 8) {
+            gameOver = true;
+          }
+        }
+      }
+    }
+
+    function checkCombos(side) {
+      const stack = blocks[side];
+      if (stack.length >= 3) {
+        const topColor = stack[stack.length - 1];
+        let matches = 0;
+        for (let j = stack.length - 1; j >= 0; j--) {
+          if (stack[j] === topColor) matches++;
+          else break;
+        }
+        if (matches >= 3) {
+          stack.splice(stack.length - matches, matches);
+          score += matches * 30;
+          document.getElementById('score').textContent = score;
+          if (score > highScore) {
+            highScore = score;
+            document.getElementById('high').textContent = highScore;
+            localStorage.setItem('hextris_high', highScore);
+          }
+        }
+      }
+    }
+
+    function drawHexagon(x, y, r, fill, stroke) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        const hx = x + r * Math.cos(a);
+        const hy = y + r * Math.sin(a);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#0b0f19';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Rotating core
+      ctx.save();
+      ctx.translate(CENTER.x, CENTER.y);
+      ctx.rotate(angle);
+
+      // Draw center hex
+      drawHexagon(0, 0, HEX_RADIUS, '#1e293b', '#334155');
+
+      // Draw stacked blocks
+      for (let side = 0; side < 6; side++) {
+        const stack = blocks[side];
+        const a1 = side * Math.PI / 3;
+        const a2 = (side + 1) * Math.PI / 3;
+
+        stack.forEach((color, idx) => {
+          const r1 = HEX_RADIUS + idx * 12;
+          const r2 = r1 + 10;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(r1 * Math.cos(a1), r1 * Math.sin(a1));
+          ctx.lineTo(r1 * Math.cos(a2), r1 * Math.sin(a2));
+          ctx.lineTo(r2 * Math.cos(a2), r2 * Math.sin(a2));
+          ctx.lineTo(r2 * Math.cos(a1), r2 * Math.sin(a1));
+          ctx.closePath();
+          ctx.fill();
+        });
+      }
+
+      ctx.restore();
+
+      // Draw falling blocks
+      fallingBlocks.forEach(b => {
+        const a1 = b.side * Math.PI / 3;
+        const a2 = (b.side + 1) * Math.PI / 3;
+        const r1 = b.dist;
+        const r2 = r1 + 10;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.moveTo(CENTER.x + r1 * Math.cos(a1), CENTER.y + r1 * Math.sin(a1));
+        ctx.lineTo(CENTER.x + r1 * Math.cos(a2), CENTER.y + r1 * Math.sin(a2));
+        ctx.lineTo(CENTER.x + r2 * Math.cos(a2), CENTER.y + r2 * Math.sin(a2));
+        ctx.lineTo(CENTER.x + r2 * Math.cos(a1), CENTER.y + r2 * Math.sin(a1));
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(11, 15, 25, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Tap or Space to Restart', canvas.width / 2, canvas.height / 2 + 25);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    reset();
+    loop();
+  </script>
+</body>
+</html>

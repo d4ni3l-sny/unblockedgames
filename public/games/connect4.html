@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Connect 4 Master</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 12px; }
+    .header { width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .status { font-size: 16px; font-weight: bold; color: #38bdf8; }
+    .board-container { background: #1e3a8a; padding: 12px; border-radius: 16px; border: 3px solid #1d4ed8; box-shadow: 0 10px 30px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(7, 48px); grid-template-rows: repeat(6, 48px); gap: 8px; }
+    @media (max-width: 450px) {
+      .grid { grid-template-columns: repeat(7, 38px); grid-template-rows: repeat(6, 38px); gap: 6px; }
+    }
+    .col-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 4px; }
+    .drop-btn { background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #94a3b8; font-size: 14px; padding: 4px 0; cursor: pointer; }
+    .drop-btn:hover { background: rgba(255,255,255,0.25); color: #fff; }
+    .cell { background: #0f172a; border-radius: 50%; border: 2px solid #1e293b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s ease, background-color 0.2s; }
+    .cell.red { background: radial-gradient(circle at 35% 35%, #ef4444, #991b1b); border-color: #f87171; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+    .cell.yellow { background: radial-gradient(circle at 35% 35%, #facc15, #ca8a04); border-color: #fde047; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
+    .cell.win { transform: scale(1.1); animation: pulse 0.8s infinite alternate; }
+    @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.12); } }
+    .controls { display: flex; gap: 8px; margin-top: 14px; }
+    .btn { background: #3b82f6; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; }
+    .btn:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="status" id="status-text">🔴 Red's Turn</div>
+    <button class="btn" id="restart-btn">New Game</button>
+  </div>
+
+  <div class="board-container">
+    <div class="col-header">
+      <button class="drop-btn" onclick="drop(0)">▼</button>
+      <button class="drop-btn" onclick="drop(1)">▼</button>
+      <button class="drop-btn" onclick="drop(2)">▼</button>
+      <button class="drop-btn" onclick="drop(3)">▼</button>
+      <button class="drop-btn" onclick="drop(4)">▼</button>
+      <button class="drop-btn" onclick="drop(5)">▼</button>
+      <button class="drop-btn" onclick="drop(6)">▼</button>
+    </div>
+    <div class="grid" id="board"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="mode-toggle">Mode: 2-Player</button>
+  </div>
+
+  <script>
+    const ROWS = 6, COLS = 7;
+    let grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+    let turn = 1; // 1 = Red, 2 = Yellow
+    let vsAI = false;
+    let gameOver = false;
+
+    const boardEl = document.getElementById('board');
+    const statusText = document.getElementById('status-text');
+    const modeBtn = document.getElementById('mode-toggle');
+    const restartBtn = document.getElementById('restart-btn');
+
+    function init() {
+      grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+      turn = 1;
+      gameOver = false;
+      statusText.textContent = "🔴 Red's Turn";
+      render();
+    }
+
+    function render() {
+      boardEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const div = document.createElement('div');
+          div.className = 'cell';
+          if (grid[r][c] === 1) div.classList.add('red');
+          if (grid[r][c] === 2) div.classList.add('yellow');
+          div.addEventListener('click', () => drop(c));
+          boardEl.appendChild(div);
+        }
+      }
+    }
+
+    function drop(col) {
+      if (gameOver) return;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (grid[r][col] === 0) {
+          grid[r][col] = turn;
+          render();
+          if (checkWin(r, col, turn)) {
+            gameOver = true;
+            statusText.textContent = (turn === 1 ? '🔴 Red' : '🟡 Yellow') + ' Wins!';
+            return;
+          }
+          if (grid.every(row => row.every(cell => cell !== 0))) {
+            gameOver = true;
+            statusText.textContent = "It's a Draw!";
+            return;
+          }
+
+          turn = turn === 1 ? 2 : 1;
+          statusText.textContent = (turn === 1 ? "🔴 Red's" : "🟡 Yellow's") + " Turn";
+
+          if (vsAI && turn === 2 && !gameOver) {
+            setTimeout(aiMove, 300);
+          }
+          return;
+        }
+      }
+    }
+
+    function checkWin(r, c, p) {
+      const directions = [
+        [ [0, 1], [0, -1] ], // Horizontal
+        [ [1, 0], [-1, 0] ], // Vertical
+        [ [1, 1], [-1, -1] ], // Diagonal /
+        [ [1, -1], [-1, 1] ]  // Diagonal \
+      ];
+
+      for (let dir of directions) {
+        let count = 1;
+        for (let [dr, dc] of dir) {
+          let nr = r + dr, nc = c + dc;
+          while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && grid[nr][nc] === p) {
+            count++;
+            nr += dr; nc += dc;
+          }
+        }
+        if (count >= 4) return true;
+      }
+      return false;
+    }
+
+    function aiMove() {
+      if (gameOver) return;
+      // 1. Can AI win immediately?
+      for (let c = 0; c < COLS; c++) {
+        for (let r = ROWS - 1; r >= 0; r--) {
+          if (grid[r][c] === 0) {
+            grid[r][c] = 2;
+            if (checkWin(r, c, 2)) {
+              grid[r][c] = 0;
+              drop(c);
+              return;
+            }
+            grid[r][c] = 0;
+            break;
+          }
+        }
+      }
+      // 2. Block player immediate win?
+      for (let c = 0; c < COLS; c++) {
+        for (let r = ROWS - 1; r >= 0; r--) {
+          if (grid[r][c] === 0) {
+            grid[r][c] = 1;
+            if (checkWin(r, c, 1)) {
+              grid[r][c] = 0;
+              drop(c);
+              return;
+            }
+            grid[r][c] = 0;
+            break;
+          }
+        }
+      }
+      // 3. Pick random valid col (prefer center)
+      const centerOrder = [3, 2, 4, 1, 5, 0, 6];
+      for (let c of centerOrder) {
+        if (grid[0][c] === 0) {
+          drop(c);
+          return;
+        }
+      }
+    }
+
+    modeBtn.addEventListener('click', () => {
+      vsAI = !vsAI;
+      modeBtn.textContent = vsAI ? 'Mode: vs AI' : 'Mode: 2-Player';
+      init();
+    });
+
+    restartBtn.addEventListener('click', init);
+    init();
+  </script>
+</body>
+</html>

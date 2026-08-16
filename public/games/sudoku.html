@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Daily Sudoku Master</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 12px; }
+    .header { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .title { font-size: 20px; font-weight: 800; color: #38bdf8; }
+    .diff-btn { background: #334155; color: #fff; border: 1px solid #475569; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .board { display: grid; grid-template-columns: repeat(9, 36px); grid-template-rows: repeat(9, 36px); background: #334155; border: 3px solid #64748b; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    @media (max-width: 400px) {
+      .board { grid-template-columns: repeat(9, 32px); grid-template-rows: repeat(9, 32px); }
+    }
+    .cell { background: #1e293b; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border: 0.5px solid #334155; }
+    .cell.initial { color: #38bdf8; font-weight: 900; background: #0f172a; }
+    .cell.selected { background: #3b82f6 !important; color: #fff !important; }
+    .cell.highlight { background: #334155; }
+    .cell.error { color: #ef4444; }
+    .cell:nth-child(3n) { border-right: 2px solid #64748b; }
+    .cell:nth-child(9n) { border-right: none; }
+    .cell-row-3 { border-bottom: 2px solid #64748b; }
+    .cell-row-6 { border-bottom: 2px solid #64748b; }
+    .numpad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; max-width: 360px; margin-top: 14px; }
+    .num-btn { background: #1e293b; border: 1px solid #334155; color: #fff; font-size: 18px; font-weight: bold; padding: 10px 0; border-radius: 8px; cursor: pointer; text-align: center; }
+    .num-btn:active { background: #3b82f6; }
+    .action-btn { background: #475569; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Sudoku</div>
+    <button class="diff-btn" id="diff-btn">Easy</button>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="numpad">
+    <button class="num-btn" onclick="enterNum(1)">1</button>
+    <button class="num-btn" onclick="enterNum(2)">2</button>
+    <button class="num-btn" onclick="enterNum(3)">3</button>
+    <button class="num-btn" onclick="enterNum(4)">4</button>
+    <button class="num-btn" onclick="enterNum(5)">5</button>
+    <button class="num-btn" onclick="enterNum(6)">6</button>
+    <button class="num-btn" onclick="enterNum(7)">7</button>
+    <button class="num-btn" onclick="enterNum(8)">8</button>
+    <button class="num-btn" onclick="enterNum(9)">9</button>
+    <button class="num-btn action-btn" onclick="enterNum(0)">Erase</button>
+  </div>
+
+  <script>
+    const sampleBoards = [
+      {
+        puzzle: "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+        solution: "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+      },
+      {
+        puzzle: "000260701680070090190004500820100040004602900050003028009300074040050036703018000",
+        solution: "435269781682571493197834562826195347374682915951743628519326874248957136763418259"
+      }
+    ];
+
+    let currentBoardIdx = 0;
+    let boardState = [];
+    let initialMask = [];
+    let selectedCell = null;
+
+    const boardEl = document.getElementById('board');
+
+    function loadBoard() {
+      const b = sampleBoards[currentBoardIdx];
+      boardState = b.puzzle.split('').map(Number);
+      initialMask = boardState.map(v => v !== 0);
+      selectedCell = null;
+      render();
+    }
+
+    function render() {
+      boardEl.innerHTML = '';
+      for (let i = 0; i < 81; i++) {
+        const r = Math.floor(i / 9);
+        const c = i % 9;
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        if (r === 2 || r === 5) cell.classList.add('cell-row-' + (r + 1));
+        if (initialMask[i]) cell.classList.add('initial');
+        if (selectedCell === i) cell.classList.add('selected');
+        else if (selectedCell !== null) {
+          const selR = Math.floor(selectedCell / 9);
+          const selC = selectedCell % 9;
+          if (r === selR || c === selC || (Math.floor(r / 3) === Math.floor(selR / 3) && Math.floor(c / 3) === Math.floor(selC / 3))) {
+            cell.classList.add('highlight');
+          }
+        }
+
+        cell.textContent = boardState[i] !== 0 ? boardState[i] : '';
+        cell.addEventListener('click', () => {
+          selectedCell = i;
+          render();
+        });
+        boardEl.appendChild(cell);
+      }
+    }
+
+    function enterNum(num) {
+      if (selectedCell === null || initialMask[selectedCell]) return;
+      boardState[selectedCell] = num;
+      render();
+    }
+
+    window.addEventListener('keydown', e => {
+      if (e.key >= '1' && e.key <= '9') enterNum(Number(e.key));
+      if (e.key === 'Backspace' || e.key === '0') enterNum(0);
+      if (selectedCell !== null) {
+        if (e.key === 'ArrowUp' && selectedCell >= 9) { selectedCell -= 9; render(); }
+        if (e.key === 'ArrowDown' && selectedCell < 72) { selectedCell += 9; render(); }
+        if (e.key === 'ArrowLeft' && selectedCell % 9 > 0) { selectedCell -= 1; render(); }
+        if (e.key === 'ArrowRight' && selectedCell % 9 < 8) { selectedCell += 1; render(); }
+      }
+    });
+
+    document.getElementById('diff-btn').addEventListener('click', () => {
+      currentBoardIdx = (currentBoardIdx + 1) % sampleBoards.length;
+      document.getElementById('diff-btn').textContent = currentBoardIdx === 0 ? 'Easy' : 'Medium';
+      loadBoard();
+    });
+
+    loadBoard();
+  </script>
+</body>
+</html>

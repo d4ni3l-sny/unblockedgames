@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cookie Empire Clicker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 12px; }
+    .game-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 650px; background: #1e293b; border-radius: 16px; border: 2px solid #334155; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    @media (max-width: 600px) { .game-container { grid-template-columns: 1fr; } }
+    .cookie-section { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .cookie-count { font-size: 28px; font-weight: 900; color: #f59e0b; margin-bottom: 4px; }
+    .cps { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
+    .cookie-btn { width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #d97706, #92400e); border: 4px solid #b45309; box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4); cursor: pointer; position: relative; transition: transform 0.08s ease; display: flex; align-items: center; justify-content: center; font-size: 64px; }
+    .cookie-btn:active { transform: scale(0.92); }
+    .cookie-chip { position: absolute; background: #451a03; border-radius: 50%; }
+    .upgrades-section { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+    .upgrade-card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.15s; }
+    .upgrade-card:hover:not(.disabled) { background: #475569; }
+    .upgrade-card.disabled { opacity: 0.5; cursor: not-allowed; }
+    .u-info { display: flex; flex-direction: column; }
+    .u-name { font-weight: bold; font-size: 14px; color: #fff; }
+    .u-desc { font-size: 11px; color: #94a3b8; }
+    .u-cost { font-weight: 800; font-size: 13px; color: #f59e0b; }
+    .u-count { background: #1e293b; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .floating-text { position: absolute; color: #facc15; font-weight: 900; pointer-events: none; animation: floatUp 0.8s ease-out forwards; }
+    @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-40px); } }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="cookie-section">
+      <div class="cookie-count" id="cookies">0 Cookies</div>
+      <div class="cps" id="cps">per second: 0</div>
+      <div class="cookie-btn" id="cookie">
+        🍪
+      </div>
+    </div>
+
+    <div class="upgrades-section" id="upgrades-list"></div>
+  </div>
+
+  <script>
+    let cookies = parseInt(localStorage.getItem('cookie_count') || '0', 10);
+    const upgrades = [
+      { id: 'cursor', name: 'Auto-Clicker', baseCost: 15, cps: 0.5, count: 0, desc: '+0.5 cookies/s' },
+      { id: 'grandma', name: 'Grandma', baseCost: 100, cps: 4, count: 0, desc: '+4 cookies/s' },
+      { id: 'farm', name: 'Cookie Farm', baseCost: 1100, cps: 32, count: 0, desc: '+32 cookies/s' },
+      { id: 'mine', name: 'Cookie Mine', baseCost: 12000, cps: 260, count: 0, desc: '+260 cookies/s' },
+      { id: 'factory', name: 'Factory', baseCost: 130000, cps: 1400, count: 0, desc: '+1,400 cookies/s' },
+      { id: 'bank', name: 'Cookie Bank', baseCost: 1400000, cps: 7800, count: 0, desc: '+7,800 cookies/s' },
+      { id: 'portal', name: 'Quantum Portal', baseCost: 20000000, cps: 45000, count: 0, desc: '+45,000 cookies/s' }
+    ];
+
+    // Load saved counts
+    upgrades.forEach(u => {
+      const saved = localStorage.getItem('cookie_' + u.id);
+      if (saved) u.count = parseInt(saved, 10);
+    });
+
+    const cookieEl = document.getElementById('cookie');
+    const cookiesText = document.getElementById('cookies');
+    const cpsText = document.getElementById('cps');
+    const listEl = document.getElementById('upgrades-list');
+
+    function getCost(u) {
+      return Math.floor(u.baseCost * Math.pow(1.15, u.count));
+    }
+
+    function getTotalCps() {
+      return upgrades.reduce((acc, u) => acc + (u.count * u.cps), 0);
+    }
+
+    function updateDisplay() {
+      cookiesText.textContent = Math.floor(cookies).toLocaleString() + ' Cookies';
+      cpsText.textContent = 'per second: ' + getTotalCps().toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      renderUpgrades();
+    }
+
+    function renderUpgrades() {
+      listEl.innerHTML = '';
+      upgrades.forEach(u => {
+        const cost = getCost(u);
+        const card = document.createElement('div');
+        card.className = 'upgrade-card' + (cookies < cost ? ' disabled' : '');
+        card.innerHTML = `
+          <div class="u-info">
+            <span class="u-name">${u.name}</span>
+            <span class="u-desc">${u.desc}</span>
+            <span class="u-cost">🍪 ${cost.toLocaleString()}</span>
+          </div>
+          <div class="u-count">${u.count}</div>
+        `;
+        card.addEventListener('click', () => buyUpgrade(u));
+        listEl.appendChild(card);
+      });
+    }
+
+    function buyUpgrade(u) {
+      const cost = getCost(u);
+      if (cookies >= cost) {
+        cookies -= cost;
+        u.count++;
+        localStorage.setItem('cookie_' + u.id, u.count);
+        localStorage.setItem('cookie_count', cookies);
+        updateDisplay();
+      }
+    }
+
+    function clickCookie(e) {
+      cookies += 1 + Math.floor(getTotalCps() * 0.05);
+      updateDisplay();
+
+      // Floating text
+      const float = document.createElement('div');
+      float.className = 'floating-text';
+      float.textContent = '+1';
+      const rect = cookieEl.getBoundingClientRect();
+      float.style.left = (rect.left + rect.width / 2 + (Math.random() - 0.5) * 40) + 'px';
+      float.style.top = (rect.top + 20) + 'px';
+      document.body.appendChild(float);
+      setTimeout(() => float.remove(), 800);
+    }
+
+    cookieEl.addEventListener('pointerdown', clickCookie);
+
+    // CPS loop
+    setInterval(() => {
+      const cps = getTotalCps();
+      if (cps > 0) {
+        cookies += cps / 10;
+        updateDisplay();
+      }
+    }, 100);
+
+    // Auto save
+    setInterval(() => {
+      localStorage.setItem('cookie_count', Math.floor(cookies));
+    }, 3000);
+
+    updateDisplay();
+  </script>
+</body>
+</html>

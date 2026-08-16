@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Retro Pong Arena</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: monospace; }
+    body { background: #030712; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 12px; touch-action: none; }
+    .header { width: 100%; max-width: 520px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .score-board { font-size: 32px; font-weight: 900; color: #38bdf8; display: flex; gap: 24px; }
+    .mode-select { display: flex; gap: 8px; }
+    .m-btn { background: #1f2937; color: #fff; border: 1px solid #374151; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .m-btn.active { background: #3b82f6; border-color: #60a5fa; }
+    canvas { display: block; background: #000; border: 2px solid #374151; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: crosshair; }
+    .hint { color: #64748b; font-size: 11px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="score-board"><span id="p1-score">0</span> : <span id="p2-score">0</span></div>
+    <div class="mode-select">
+      <button class="m-btn active" id="mode-1p">1-Player (vs AI)</button>
+      <button class="m-btn" id="mode-2p">2-Player</button>
+    </div>
+  </div>
+
+  <canvas id="pong" width="520" height="340"></canvas>
+
+  <div class="hint">1P: Move mouse or touch to control left paddle | 2P: W/S for P1, Up/Down for P2</div>
+
+  <script>
+    const canvas = document.getElementById('pong');
+    const ctx = canvas.getContext('2d');
+
+    let p1 = { x: 20, y: 130, w: 12, h: 80, vy: 0 };
+    let p2 = { x: 488, y: 130, w: 12, h: 80, vy: 0 };
+    let ball = { x: 260, y: 170, vx: 5, vy: 2, r: 6 };
+    let p1Score = 0, p2Score = 0;
+    let is2Player = false;
+    let keys = {};
+
+    document.getElementById('mode-1p').addEventListener('click', () => {
+      is2Player = false;
+      document.getElementById('mode-1p').classList.add('active');
+      document.getElementById('mode-2p').classList.remove('active');
+      reset();
+    });
+
+    document.getElementById('mode-2p').addEventListener('click', () => {
+      is2Player = true;
+      document.getElementById('mode-2p').classList.add('active');
+      document.getElementById('mode-1p').classList.remove('active');
+      reset();
+    });
+
+    function resetBall(winner) {
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      ball.vx = (winner === 1 ? -4.5 : 4.5);
+      ball.vy = (Math.random() - 0.5) * 6;
+    }
+
+    function reset() {
+      p1Score = 0; p2Score = 0;
+      document.getElementById('p1-score').textContent = p1Score;
+      document.getElementById('p2-score').textContent = p2Score;
+      p1.y = canvas.height / 2 - p1.h / 2;
+      p2.y = canvas.height / 2 - p2.h / 2;
+      resetBall(Math.random() > 0.5 ? 1 : 2);
+    }
+
+    window.addEventListener('keydown', e => { keys[e.code] = true; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    canvas.addEventListener('pointermove', e => {
+      if (!is2Player) {
+        const rect = canvas.getBoundingClientRect();
+        const clientY = e.clientY - rect.top;
+        p1.y = Math.max(0, Math.min(canvas.height - p1.h, (clientY / rect.height) * canvas.height - p1.h / 2));
+      }
+    });
+
+    function update() {
+      // 2P controls
+      if (is2Player) {
+        if (keys['KeyW']) p1.y = Math.max(0, p1.y - 6);
+        if (keys['KeyS']) p1.y = Math.min(canvas.height - p1.h, p1.y + 6);
+      }
+
+      if (is2Player) {
+        if (keys['ArrowUp']) p2.y = Math.max(0, p2.y - 6);
+        if (keys['ArrowDown']) p2.y = Math.min(canvas.height - p2.h, p2.y + 6);
+      } else {
+        // AI for Player 2
+        const targetY = ball.y - p2.h / 2;
+        p2.y += (targetY - p2.y) * 0.085;
+        p2.y = Math.max(0, Math.min(canvas.height - p2.h, p2.y));
+      }
+
+      // Move ball
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Top / bottom bounce
+      if (ball.y - ball.r <= 0) { ball.y = ball.r; ball.vy *= -1; }
+      if (ball.y + ball.r >= canvas.height) { ball.y = canvas.height - ball.r; ball.vy *= -1; }
+
+      // Paddle 1 Collision
+      if (ball.x - ball.r <= p1.x + p1.w && ball.x + ball.r >= p1.x && ball.y >= p1.y && ball.y <= p1.y + p1.h) {
+        ball.vx = Math.abs(ball.vx) * 1.05; // speed up slightly
+        const hit = (ball.y - (p1.y + p1.h / 2)) / (p1.h / 2);
+        ball.vy = hit * 6;
+        ball.x = p1.x + p1.w + ball.r;
+      }
+
+      // Paddle 2 Collision
+      if (ball.x + ball.r >= p2.x && ball.x - ball.r <= p2.x + p2.w && ball.y >= p2.y && ball.y <= p2.y + p2.h) {
+        ball.vx = -Math.abs(ball.vx) * 1.05;
+        const hit = (ball.y - (p2.y + p2.h / 2)) / (p2.h / 2);
+        ball.vy = hit * 6;
+        ball.x = p2.x - ball.r;
+      }
+
+      // Score check
+      if (ball.x < 0) {
+        p2Score++;
+        document.getElementById('p2-score').textContent = p2Score;
+        resetBall(2);
+      } else if (ball.x > canvas.width) {
+        p1Score++;
+        document.getElementById('p1-score').textContent = p1Score;
+        resetBall(1);
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Center dotted line
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Paddles
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
+
+      // Ball
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    reset();
+    loop();
+  </script>
+</body>
+</html>

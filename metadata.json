@@ -1,0 +1,6 @@
+{
+  "name": "Unblocked Games Portal",
+  "description": "A fast, lightweight unblocked games platform storing games as iframes in JSON with category browsing, tab cloaking, custom game additions, and fullscreen play.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
