@@ -69,22 +69,41 @@ export const GamePlayer = ({
     setIframeKey(prev => prev + 1);
   };
 
+  const getResolvedUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    try {
+      const base = window.location.origin + window.location.pathname;
+      const dirBase = base.endsWith('/') ? base : base.substring(0, base.lastIndexOf('/') + 1);
+      return new URL(url.replace(/^\.\//, ''), dirBase).href;
+    } catch {
+      return url;
+    }
+  };
+
   const handleOpenBlankTab = () => {
     // Open in about:blank for unblocked stealth play
-    const win = window.open('about:blank', '_blank');
-    if (win) {
-      win.document.title = game.title;
-      const iframe = win.document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.inset = '0';
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      iframe.src = game.iframeUrl.startsWith('/') ? window.location.origin + game.iframeUrl : game.iframeUrl;
-      iframe.allow = "autoplay; fullscreen; gamepad";
-      win.document.body.style.margin = '0';
-      win.document.body.style.overflow = 'hidden';
-      win.document.body.appendChild(iframe);
+    try {
+      const targetUrl = getResolvedUrl(game.iframeUrl);
+      const win = window.open('about:blank', '_blank');
+      if (win) {
+        win.document.title = game.title;
+        const iframe = win.document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.inset = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.src = targetUrl;
+        iframe.allow = "autoplay; fullscreen; gamepad";
+        win.document.body.style.margin = '0';
+        win.document.body.style.overflow = 'hidden';
+        win.document.body.appendChild(iframe);
+      }
+    } catch (err) {
+      console.error('Failed to open stealth tab', err);
     }
   };
 
@@ -150,7 +169,7 @@ export const GamePlayer = ({
             <iframe
               key={iframeKey}
               ref={iframeRef}
-              src={game.iframeUrl}
+              src={getResolvedUrl(game.iframeUrl)}
               title={game.title}
               onLoad={() => setIsLoading(false)}
               allow="autoplay; fullscreen; gamepad; focus-without-user-activation *"

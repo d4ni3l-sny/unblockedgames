@@ -39,19 +39,32 @@ export default function App() {
     }
   });
 
-  // Load games from /games.json and merge with locally added custom games
+  // Load games from games.json and merge with locally added custom games
   useEffect(() => {
     const fetchGames = async () => {
       let loadedGames = [];
-      try {
-        const res = await fetch('/games.json');
-        if (res.ok) {
-          loadedGames = await res.json();
-        } else {
-          loadedGames = DEFAULT_GAMES;
+      const jsonUrls = [
+        `${import.meta.env.BASE_URL || './'}games.json`,
+        './games.json',
+        '/games.json'
+      ];
+
+      for (const url of jsonUrls) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              loadedGames = data;
+              break;
+            }
+          }
+        } catch {
+          // try next URL
         }
-      } catch (err) {
-        console.warn('Could not fetch /games.json, using default dataset:', err);
+      }
+
+      if (loadedGames.length === 0) {
         loadedGames = DEFAULT_GAMES;
       }
 
